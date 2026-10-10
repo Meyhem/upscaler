@@ -6,6 +6,7 @@ train:
   lr: 1.0e-4
   scheduler: constant
   init_from: runs/stage1/ema.pt
+  ckpt_every: 1000       # ~8 min at ~2 it/s; limits work lost to a crash
 gan:
   d_num_feat: 64
   d_lr: 1.0e-4

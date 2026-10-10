@@ -176,14 +176,7 @@ def train(cfg: dict, resume: bool = False) -> dict:
                   flush=True)
             history.append({"iter": it, **vals})
 
-        if it % tcfg["val_every"] == 0 or it == total:
-            last_val = evaluate_pairs(lambda x: tiled_forward(ema.module, x, scale, vcfg["tile"], 16),
-                                      vcfg["dir"], device, vcfg.get("max_images"), lpips_metric)
-            for k, v in last_val.items():
-                writer.add_scalar(f"val/{k}", v, it)
-            writer.add_image("val/bicubic_sr_hr", _sample_grid(ema.module, vcfg["dir"], device, scale), it)
-            print(f"[{it}/{total}] val " + " ".join(f"{k}={v:.4f}" for k, v in last_val.items()), flush=True)
-
+        # checkpoint before validation, so a crash during validation loses nothing
         if it % tcfg["ckpt_every"] == 0 or it == total:
             state = {"iter": it, "net": net.state_dict(), "ema": ema.state_dict(), "opt_g": opt_g.state_dict(),
                      "model_cfg": cfg["model"], "torch_rng": torch.get_rng_state(),
@@ -195,6 +188,14 @@ def train(cfg: dict, resume: bool = False) -> dict:
                 state["opt_d"] = opt_d.state_dict()
             save_checkpoint(ckpt_dir / f"iter_{it}.pt", state)
             export_generator(run_dir / "ema.pt", cfg["model"], ema.state_dict())
+
+        if it % tcfg["val_every"] == 0 or it == total:
+            last_val = evaluate_pairs(lambda x: tiled_forward(ema.module, x, scale, vcfg["tile"], 16),
+                                      vcfg["dir"], device, vcfg.get("max_images"), lpips_metric)
+            for k, v in last_val.items():
+                writer.add_scalar(f"val/{k}", v, it)
+            writer.add_image("val/bicubic_sr_hr", _sample_grid(ema.module, vcfg["dir"], device, scale), it)
+            print(f"[{it}/{total}] val " + " ".join(f"{k}={v:.4f}" for k, v in last_val.items()), flush=True)
 
     writer.close()
     return {"iter": max(start, total), "history": history, "val": last_val}

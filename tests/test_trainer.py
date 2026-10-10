@@ -59,3 +59,18 @@ def test_stage2_gan_from_stage1(tmp_path):
     assert {"l_pix", "l_percep", "l_gan", "l_d"} <= set(res["history"][-1])
     ck = torch.load(Path(cfg["run_dir"]) / "ckpt" / "iter_4.pt", weights_only=True)
     assert "net_d" in ck and "opt_d" in ck
+
+
+def test_checkpoint_is_written_before_validation(tmp_path, monkeypatch):
+    import upscaler.trainer as trainer_mod
+
+    def crash(*a, **k):
+        raise RuntimeError("simulated GPU failure during validation")
+
+    monkeypatch.setattr(trainer_mod, "evaluate_pairs", crash)
+    cfg = _cfg(tmp_path, total_iters=10, val_every=10, ckpt_every=10)
+    try:
+        train(cfg)
+    except RuntimeError:
+        pass
+    assert (Path(cfg["run_dir"]) / "ckpt" / "iter_10.pt").exists()
