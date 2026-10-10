@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "upscaler"
+version = "0.1.0"
+description = "x4 real-world photo super-resolution, trained from scratch"
+requires-python = ">=3.12"
+dependencies = [
+  "torch>=2.7",
+  "torchvision>=0.22",
+  "numpy",
+  "pillow",
+  "opencv-python-headless",
+  "pyyaml",
+  "tensorboard",
+  "lpips",
+  "tqdm",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "scikit-image"]
+
+[tool.setuptools.packages.find]
+include = ["upscaler*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
