@@ -2,7 +2,7 @@
 
 A ×4 image super-resolution model for **real-world photos**, built and trained from scratch in PyTorch.
 
-- **Model:** compact SRVGG-style CNN (~1.2M params, PixelShuffle ×4, global bilinear residual)
+- **Model:** compact SRVGG-style CNN (~0.62M params, PixelShuffle ×4, global bilinear residual)
 - **Data:** DF2K (DIV2K + Flickr2K) with Real-ESRGAN-style on-the-fly degradations (blur, resize, noise, JPEG — two passes)
 - **Training:** stage 1 L1 (PSNR model) → stage 2 GAN fine-tune (L1 + VGG perceptual + U-Net discriminator)
 - **Target hardware:** single RTX 5080 (16 GB), a few hours per stage

@@ -66,7 +66,7 @@ LR (3×H×W, [0,1])
  + bilinear_upsample(LR, s)            (global residual)
  → output
 ```
-- Defaults: `num_feat F=64`, `num_conv N=16`, `scale s=4` → ~1.2M parameters.
+- Defaults: `num_feat F=64`, `num_conv N=16`, `scale s=4` → ~0.62M parameters (621,424).
 - Fully convolutional; arbitrary input size.
 - Output clamped to [0, 1] only at inference (not during training, to keep gradients).
 - Preset `tiny`: F=32, N=8 (smoke tests).
@@ -139,6 +139,7 @@ upscaler/
 │   ├── data/       download.py · prepare.py · dataset.py · degrade.py
 │   ├── models/     __init__.py · srvgg.py · discriminator.py
 │   ├── losses.py   metrics.py   tiling.py   utils.py
+│   ├── imageio.py  evaluation.py  trainer.py   (train.py / evaluate.py are thin CLIs over these)
 ├── train.py  evaluate.py  upscale.py
 ├── tests/
 ├── datasets/  runs/  weights/      (gitignored)
@@ -151,7 +152,7 @@ Dependencies: torch, torchvision, numpy, pillow, opencv-python-headless, pyyaml,
 ## 8. Testing (pytest, no dataset required)
 | Area | Checks |
 |---|---|
-| Model | output shape = 4× input for several sizes; param count ≈ 1.2M ±10% for defaults; gradients reach first conv |
+| Model | output shape = 4× input for several sizes; param count = 621,424 for defaults (89,040 for tiny); gradients reach first conv |
 | Discriminator | output shape = input spatial shape, 1 channel |
 | Degradation | output = HR/4 exactly; values in [0,1]; same seed → identical output; each stage enabled alone changes the image |
 | Tiling | tiled == untiled output within 1e-4 (fp32) on a 300×200 image with tile 64, tile_pad 24 (≥ generator receptive-field radius of 18 LR px; the CLI default of 16 is a speed/quality trade-off, not exact) |

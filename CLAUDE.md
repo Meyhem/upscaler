@@ -4,7 +4,7 @@
 
 ## Key decisions (don't change without asking)
 - Generator is trained from random init. The only pretrained weights allowed are frozen VGG19 (perceptual loss, stage 2) and LPIPS (eval metric). Never initialize the generator from external weights.
-- Scale is ×4 only. Generator: `SRVGGCompact` (F=64, N=16, ~1.2M params). New architectures go through the registry in `upscaler/models/__init__.py`.
+- Scale is ×4 only. Generator: `SRVGGCompact` (F=64, N=16, ~0.62M params). New architectures go through the registry in `upscaler/models/__init__.py`.
 - Degradation runs on GPU per batch (`upscaler/data/degrade.py`) and must stay seedable via an explicit `torch.Generator`.
 - Shipped model = EMA generator weights; checkpoints embed the model config.
 - Hardware: RTX 5080 16 GB (Blackwell, sm_120) → PyTorch must be a CUDA ≥ 12.8 build. Training budget: a few hours per stage.
