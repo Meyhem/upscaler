@@ -1,0 +1,19 @@
+# End-to-end sanity check on 50 real tiles: tiny model, 200 iters, < 1 min on GPU.
+_base_: stage1_psnr.yaml
+run_dir: runs/smoke
+model:
+  num_feat: 32
+  num_conv: 8
+data:
+  max_tiles: 50
+  batch_size: 4
+  num_workers: 2
+train:
+  total_iters: 200
+  compile: false
+  log_every: 10
+  val_every: 100
+  ckpt_every: 100
+val:
+  max_images: 4
+  lpips: false

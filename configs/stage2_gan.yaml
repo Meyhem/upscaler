@@ -1,0 +1,14 @@
+# Stage 2: GAN fine-tune from the stage-1 EMA weights, ~100k iters (target 3-4 h).
+_base_: stage1_psnr.yaml
+run_dir: runs/stage2
+train:
+  total_iters: 100000
+  lr: 1.0e-4
+  scheduler: constant
+  init_from: runs/stage1/ema.pt
+gan:
+  d_num_feat: 64
+  d_lr: 1.0e-4
+  perceptual_weight: 1.0
+  gan_weight: 0.1
+  vgg_pretrained: true

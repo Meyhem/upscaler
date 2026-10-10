@@ -1,0 +1,34 @@
+# Stage 1: L1-only "PSNR" model, ~200k iters (target 2-4 h on RTX 5080).
+seed: 0
+run_dir: runs/stage1
+model:
+  type: srvgg_compact
+  num_feat: 64
+  num_conv: 16
+  scale: 4
+data:
+  tiles_dir: datasets/df2k_tiles
+  max_tiles: null
+  crop: 256
+  batch_size: 32
+  num_workers: 8
+degradation: {}          # empty = DegradeConfig defaults (Real-ESRGAN x4plus-like)
+train:
+  total_iters: 200000
+  lr: 2.0e-4
+  scheduler: cosine
+  eta_min: 1.0e-6
+  ema_decay: 0.999
+  usm_gt: true
+  compile: true
+  init_from: null
+  pixel_weight: 1.0
+  log_every: 100
+  val_every: 5000
+  ckpt_every: 5000
+val:
+  dir: datasets/val_x4
+  max_images: null
+  lpips: true
+  tile: 512
+gan: null
