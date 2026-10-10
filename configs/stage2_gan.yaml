@@ -1,8 +1,8 @@
-# Stage 2: GAN fine-tune from the stage-1 EMA weights, ~100k iters (target 3-4 h).
+# Stage 2: GAN fine-tune from the stage-1 EMA weights, ~25k iters (~3.5 h at ~2 it/s on RTX 5080).
 _base_: stage1_psnr.yaml
 run_dir: runs/stage2
 train:
-  total_iters: 100000
+  total_iters: 25000
   lr: 1.0e-4
   scheduler: constant
   init_from: runs/stage1/ema.pt

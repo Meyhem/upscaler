@@ -97,7 +97,7 @@ Single script, behavior selected by config (`configs/stage1_psnr.yaml`, `configs
   - GAN: vanilla BCE-with-logits on per-pixel discriminator output.
 - Discriminator loss: BCE real vs fake (fake detached).
 - Optimizers: Adam(0.9, 0.99), lr 1e-4 for both, constant.
-- Iterations: 100k (target 3–4 h).
+- Iterations: 25k (~3.5 h; measured ~2 it/s on RTX 5080 — 100k would take ~14 h, cut on 2026-10-10 by user decision).
 
 ### 4.3 Common
 - **EMA** of generator weights, decay 0.999; EMA weights are used for validation and are the shipped model.
