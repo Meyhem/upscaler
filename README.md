@@ -7,7 +7,7 @@ A ×4 image super-resolution model for **real-world photos**, built and trained 
 - **Training:** stage 1 L1 (PSNR model) → stage 2 GAN fine-tune (L1 + VGG perceptual + U-Net discriminator)
 - **Target hardware:** single RTX 5080 (16 GB), a few hours per stage
 
-> **Status:** design phase. See the [design spec](docs/superpowers/specs/2026-10-10-image-upscaler-design.md).
+> **Status:** design phase. See the [design spec](design/2026-10-10-image-upscaler-design.md).
 
 ## Planned usage
 

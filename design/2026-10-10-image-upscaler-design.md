@@ -142,7 +142,7 @@ upscaler/
 ├── train.py  evaluate.py  upscale.py
 ├── tests/
 ├── datasets/  runs/  weights/      (gitignored)
-└── docs/superpowers/specs/
+└── design/                          (specs and implementation plans)
 ```
 Environment: `uv` venv; PyTorch wheel for CUDA ≥ 12.8 (required for RTX 50-series / sm_120).
 

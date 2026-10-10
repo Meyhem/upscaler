@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-×4 real-world photo super-resolution, trained from scratch in PyTorch. Design source of truth: `docs/superpowers/specs/2026-10-10-image-upscaler-design.md` — read it before changing architecture, data pipeline, or training.
+×4 real-world photo super-resolution, trained from scratch in PyTorch. Design source of truth: `design/2026-10-10-image-upscaler-design.md` — read it before changing architecture, data pipeline, or training.
 
 ## Key decisions (don't change without asking)
 - Generator is trained from random init. The only pretrained weights allowed are frozen VGG19 (perceptual loss, stage 2) and LPIPS (eval metric). Never initialize the generator from external weights.
@@ -19,6 +19,10 @@ python train.py --config configs/stage2_gan.yaml
 python evaluate.py --ckpt <path> --out <dir>
 python upscale.py <input> -o <output>
 ```
+
+## Workflow
+- All design docs and implementation plans live in `design/` (specs: `design/YYYY-MM-DD-<topic>-design.md`, plans: `design/YYYY-MM-DD-<topic>-plan.md`). Never write them to `docs/superpowers/...`.
+- **Auto-push:** after every completed feature or fix (tests passing), commit and `git push` to `origin main` without asking.
 
 ## Conventions
 - Plain PyTorch + YAML configs; no Lightning/Hydra/etc.
