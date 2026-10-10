@@ -85,3 +85,40 @@ def test_errors(tmp_path, model, capsys):
     assert _run(tmp_path / "empty", "-o", tmp_path / "o", "--model", model) == 1
     err = capsys.readouterr().err
     assert "checkpoint not found" in err and "x2 model" in err
+
+
+def test_gpu_out_of_memory_is_reported_not_crashed(tmp_path, model, capsys, monkeypatch):
+    import torch
+
+    def boom(*a, **k):
+        raise torch.OutOfMemoryError("CUDA out of memory. Tried to allocate 8.58 GiB")
+
+    monkeypatch.setattr(upscale, "tiled_forward", boom)
+    src = tmp_path / "a.png"
+    Image.fromarray(random_image(8, 8)).save(src)
+    assert _run(src, "-o", tmp_path / "o.png", "--model", model) == 1
+    d = tmp_path / "in"
+    d.mkdir()
+    Image.fromarray(random_image(8, 8)).save(d / "x.png")
+    assert _run(d, "-o", tmp_path / "out", "--model", model) == 1  # skipped, not a traceback
+    assert "--tile" in capsys.readouterr().err
+
+
+def test_16bit_grayscale_is_scaled_not_clipped(tmp_path, model):
+    import numpy as np
+
+    grad = np.tile(np.linspace(0, 65535, 32).astype(np.uint16), (16, 1))
+    Image.fromarray(grad).save(tmp_path / "g16.png")
+    assert Image.open(tmp_path / "g16.png").mode.startswith("I")
+    assert _run(tmp_path / "g16.png", "-o", tmp_path / "o.png", "--model", model, "--tile", 0) == 0
+    mean = np.asarray(Image.open(tmp_path / "o.png")).mean()
+    assert 90 < mean < 165  # ~127, not ~250
+
+
+def test_icc_profile_is_preserved(tmp_path, model):
+    from PIL import ImageCms
+
+    icc = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+    Image.fromarray(random_image(8, 8)).save(tmp_path / "p3.jpg", icc_profile=icc)
+    assert _run(tmp_path / "p3.jpg", "-o", tmp_path / "o.png", "--model", model) == 0
+    assert Image.open(tmp_path / "o.png").info.get("icc_profile") == icc

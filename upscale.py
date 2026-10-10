@@ -10,6 +10,7 @@ import contextlib
 import sys
 from pathlib import Path
 
+import numpy as np
 import torch
 from PIL import Image, ImageOps
 from tqdm import tqdm
@@ -20,17 +21,30 @@ from upscaler.tiling import tiled_forward
 from upscaler.utils import load_generator
 
 SCALE = 4
+HIGH_BIT_MODES = ("I", "I;16", "I;16B", "I;16L", "I;16N", "F")
+OOM_HINT = "out of GPU memory; try a smaller --tile (e.g. 256) or --cpu"
 
 
-def load_image(path) -> tuple[torch.Tensor, Image.Image | None]:
-    """RGB tensor (EXIF orientation applied) and the alpha channel if the image has one."""
+def _to_8bit(img: Image.Image) -> Image.Image:
+    """16-bit / 32-bit grayscale -> 8-bit L (PIL's convert('RGB') would clip at 255)."""
+    arr = np.asarray(img, dtype=np.float64)
+    divisor = 1.0 if img.mode == "F" and arr.max(initial=0) <= 1.0 else 257.0
+    arr = arr * 255.0 if divisor == 1.0 else arr / divisor
+    return Image.fromarray(np.clip(arr, 0, 255).round().astype(np.uint8))
+
+
+def load_image(path) -> tuple[torch.Tensor, Image.Image | None, bytes | None]:
+    """RGB tensor (EXIF orientation applied), alpha channel if any, and the ICC profile if any."""
     with Image.open(path) as img:
+        icc = img.info.get("icc_profile")
         img = ImageOps.exif_transpose(img)
+        if img.mode in HIGH_BIT_MODES:
+            img = _to_8bit(img)
         alpha = None
         if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
             img = img.convert("RGBA")
             alpha = img.getchannel("A")
-        return pil_to_tensor(img), alpha
+        return pil_to_tensor(img), alpha, icc
 
 
 @torch.no_grad()
@@ -38,19 +52,22 @@ def _upscale(model, rgb: torch.Tensor, device, tile: int, tile_pad: int, fp16: b
     x = rgb[None].to(device)
     ctx = torch.autocast("cuda", dtype=torch.float16) if fp16 and device.type == "cuda" else contextlib.nullcontext()
     with ctx:
-        y = tiled_forward(model, x, SCALE, tile, tile_pad)
-    return y.float().clamp(0, 1)[0].cpu()
+        y = tiled_forward(model, x, SCALE, tile, tile_pad, out_device="cpu")
+    return y[0].float().clamp_(0, 1)
 
 
 def _process(src: Path, dst: Path, model, args, device) -> None:
-    rgb, alpha = load_image(src)
+    rgb, alpha, icc = load_image(src)
     out = tensor_to_pil(_upscale(model, rgb, device, args.tile, args.tile_pad, args.fp16))
     if args.outscale != SCALE:
         out = out.resize((rgb.shape[2] * args.outscale, rgb.shape[1] * args.outscale), Image.LANCZOS)
     if alpha is not None:
         out.putalpha(alpha.resize(out.size, Image.BICUBIC))
     dst.parent.mkdir(parents=True, exist_ok=True)
-    out.save(dst)
+    if icc:
+        out.save(dst, icc_profile=icc)
+    else:
+        out.save(dst)
 
 
 def main(argv=None) -> int:
@@ -83,6 +100,8 @@ def main(argv=None) -> int:
             try:
                 _process(p, Path(args.output) / f"{p.stem}_x{args.outscale}.png", model, args, device)
                 ok += 1
+            except torch.OutOfMemoryError:
+                print(f"warning: skipping {p}: {OOM_HINT}", file=sys.stderr)
             except (OSError, ValueError) as e:
                 print(f"warning: skipping {p}: {e}", file=sys.stderr)
         return 0 if ok else 1
@@ -95,6 +114,9 @@ def main(argv=None) -> int:
         dst = dst / f"{src.stem}_x{args.outscale}.png"
     try:
         _process(src, dst, model, args, device)
+    except torch.OutOfMemoryError:
+        print(f"error: cannot upscale {src}: {OOM_HINT}", file=sys.stderr)
+        return 1
     except (OSError, ValueError) as e:
         print(f"error: cannot upscale {src}: {e}", file=sys.stderr)
         return 1

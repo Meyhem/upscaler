@@ -34,3 +34,10 @@ def test_disabled_or_large_tile_is_single_call():
         full = model(x)
     assert torch.equal(tiled_forward(model, x, 4, tile=0), full)
     assert torch.equal(tiled_forward(model, x, 4, tile=512), full)
+
+
+def test_output_can_live_on_another_device():
+    model = _model()
+    x = torch.rand(1, 3, 40, 40)
+    out = tiled_forward(model, x, 4, tile=16, tile_pad=24, out_device="cpu")
+    assert out.device.type == "cpu" and out.shape == (1, 3, 160, 160)
