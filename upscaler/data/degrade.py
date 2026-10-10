@@ -6,6 +6,7 @@ device as the images, so a given seed always produces the same LR images.
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass, field
 
 import torch
 import torch.nn.functional as F
@@ -180,3 +181,96 @@ def usm_sharp(x: torch.Tensor, weight: float = 0.5, radius: int = 50, threshold:
     soft = _separable_blur(mask, radius, sigma)
     sharp = (x + weight * residual).clamp(0, 1)
     return soft * sharp + (1 - soft) * x
+
+
+# --- pipeline -------------------------------------------------------------
+
+@dataclass
+class PassConfig:
+    blur_prob: float
+    sigma_range: tuple[float, float]
+    betag_range: tuple[float, float]
+    sinc_prob: float
+    resize_probs: tuple[float, float, float]  # up, down, keep
+    resize_range: tuple[float, float]
+    gaussian_noise_prob: float
+    noise_range: tuple[float, float]
+    poisson_range: tuple[float, float]
+    gray_noise_prob: float
+    jpeg_range: tuple[float, float]
+
+
+def _first_pass() -> PassConfig:
+    return PassConfig(1.0, (0.2, 3.0), (0.5, 4.0), 0.1, (0.2, 0.7, 0.1), (0.15, 1.5),
+                      0.5, (1.0, 30.0), (0.05, 3.0), 0.4, (30.0, 95.0))
+
+
+def _second_pass() -> PassConfig:
+    return PassConfig(0.8, (0.2, 1.5), (0.5, 4.0), 0.1, (0.3, 0.4, 0.3), (0.3, 1.2),
+                      0.5, (1.0, 25.0), (0.05, 2.5), 0.4, (30.0, 95.0))
+
+
+def _as_value(v):
+    return tuple(v) if isinstance(v, list) else v
+
+
+@dataclass
+class DegradeConfig:
+    scale: int = 4
+    kernel_size: int = 21
+    kernel_type_probs: tuple[float, float, float, float] = (0.5, 0.3, 0.15, 0.05)
+    pass1: PassConfig = field(default_factory=_first_pass)
+    pass2: PassConfig = field(default_factory=_second_pass)
+    final_sinc_prob: float = 0.8
+
+    @classmethod
+    def from_dict(cls, d: dict | None) -> "DegradeConfig":
+        cfg = cls()
+        for key, value in (d or {}).items():
+            if key in ("pass1", "pass2"):
+                p = getattr(cfg, key)
+                for pk, pv in value.items():
+                    if not hasattr(p, pk):
+                        raise KeyError(f"unknown degradation key {key}.{pk}")
+                    setattr(p, pk, _as_value(pv))
+            elif hasattr(cfg, key):
+                setattr(cfg, key, _as_value(value))
+            else:
+                raise KeyError(f"unknown degradation key {key}")
+        return cfg
+
+
+def _degrade_pass(x, gen, p: PassConfig, cfg: DegradeConfig, base_hw):
+    n = x.shape[0]
+    kernels = random_kernels(gen, n, cfg.kernel_size, cfg.kernel_type_probs, p.sigma_range,
+                             p.betag_range, p.sinc_prob, (math.pi / 5, math.pi))
+    use_blur = _bernoulli(gen, n, p.blur_prob)[:, None, None]
+    kernels = torch.where(use_blur, kernels, delta_kernels(n, cfg.kernel_size, x.device))
+    x = filter2d(x, kernels)
+    x = random_resize(x, gen, p.resize_probs, p.resize_range, base_hw)
+    return add_noise(x, gen, p.gaussian_noise_prob, p.noise_range, p.poisson_range, p.gray_noise_prob)
+
+
+@torch.no_grad()
+def degrade(hr: torch.Tensor, gen: torch.Generator, cfg: DegradeConfig | None = None) -> torch.Tensor:
+    """HR batch (B,3,H,W) in [0,1] -> realistically degraded LR batch (B,3,H/s,W/s)."""
+    cfg = cfg or DegradeConfig()
+    b, _, h, w = hr.shape
+    lr_hw = (h // cfg.scale, w // cfg.scale)
+
+    x = _degrade_pass(hr, gen, cfg.pass1, cfg, (h, w))
+    x = jpeg(x, gen, cfg.pass1.jpeg_range)
+    x = _degrade_pass(x, gen, cfg.pass2, cfg, lr_hw)
+
+    # final: resize to exact LR size + optional sinc, and JPEG — in random order
+    sinc = sinc_kernels(_uniform(gen, b, math.pi / 3, math.pi), cfg.kernel_size)
+    use_sinc = _bernoulli(gen, b, cfg.final_sinc_prob)[:, None, None]
+    final_k = torch.where(use_sinc, sinc, delta_kernels(b, cfg.kernel_size, x.device))
+    mode = RESIZE_MODES[_choice(gen, (1 / 3, 1 / 3, 1 / 3))]
+    if _bernoulli(gen, 1, 0.5).item():
+        x = filter2d(resize(x, lr_hw, mode), final_k)
+        x = jpeg(x, gen, cfg.pass2.jpeg_range)
+    else:
+        x = jpeg(x, gen, cfg.pass2.jpeg_range)
+        x = filter2d(resize(x, lr_hw, mode), final_k)
+    return (x.clamp(0, 1) * 255).round() / 255
