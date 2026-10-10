@@ -7,9 +7,21 @@ A ×4 image super-resolution model for **real-world photos**, built and trained 
 - **Training:** stage 1 L1 (PSNR model) → stage 2 GAN fine-tune (L1 + VGG perceptual + U-Net discriminator)
 - **Target hardware:** single RTX 5080 (16 GB), a few hours per stage
 
-> **Status:** design phase. See the [design spec](design/2026-10-10-image-upscaler-design.md).
+> **Status:** stage 1 trained and shipped as `weights/upscaler_x4.pt` (not in git). Stage 2 (GAN) not trained yet —
+> the first run was lost to a GPU fault (Xid 79) at 5k/25k iters. Design: [spec](design/2026-10-10-image-upscaler-design.md),
+> [plan](design/2026-10-10-image-upscaler-plan.md).
 
-## Planned usage
+## Results (DIV2K validation, 100 images, degraded with seed 1234)
+
+| model | PSNR ↑ | SSIM ↑ | LPIPS ↓ |
+|---|---|---|---|
+| bicubic | 24.03 | 0.611 | 0.809 |
+| stage 1 (L1, 200k iters, DIV2K tiles) | **24.28** | **0.664** | **0.574** |
+
+Stage 1: 200k iters, batch 32, ~26 it/s on RTX 5080 (~2.1 h). Tiles: 400 px, stride 200, `--min-texture 5`
+(DIV2K 45,929 tiles; Flickr2K adds 151,492 for stage 2).
+
+## Usage
 
 ```bash
 # setup
